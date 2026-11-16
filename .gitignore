@@ -1,0 +1,9 @@
+.tools/
+**/bin/
+**/obj/
+dist/
+data/
+*-probe*
+dotnet-install.ps1
+.dotnet-home/
+*.user

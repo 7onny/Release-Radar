@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF>
+    <AssemblyName>ReleaseRadar</AssemblyName><RootNamespace>ReleaseRadar</RootNamespace>
+    <Version>1.0.0</Version><Product>Release Radar</Product><Description>A quiet calendar for the next great game.</Description>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../ReleaseRadar.Core/ReleaseRadar.Core.csproj" /></ItemGroup>
+</Project>
