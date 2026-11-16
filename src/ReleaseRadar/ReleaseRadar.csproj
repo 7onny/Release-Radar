@@ -5,4 +5,5 @@
     <Version>1.0.0</Version><Product>Release Radar</Product><Description>A quiet calendar for the next great game.</Description>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../ReleaseRadar.Core/ReleaseRadar.Core.csproj" /></ItemGroup>
+  <ItemGroup><Resource Include="Assets/Charmander.png" /></ItemGroup>
 </Project>

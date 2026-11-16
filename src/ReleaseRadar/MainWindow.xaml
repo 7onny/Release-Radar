@@ -11,7 +11,9 @@
           <Button x:Name="CancelButton" Content="Cancel" Click="Cancel_Click" Visibility="Collapsed" Margin="10,0,0,0"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal">
-          <Border Background="#24364F" CornerRadius="10" Width="42" Height="42" Margin="0,0,13,0"><TextBlock Text="◈" FontSize="28" Foreground="#B8D4FF" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+          <Image Width="42" Height="42" Margin="0,0,13,0" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="Charmander">
+            <Image.Source><BitmapImage UriSource="Assets/Charmander.png" DecodePixelHeight="168"/></Image.Source>
+          </Image>
           <StackPanel><TextBlock Text="RELEASE RADAR" FontSize="17" FontWeight="Bold"/><TextBlock Text="Your next great game, on the calendar." Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,4,0,0"/></StackPanel>
         </StackPanel>
       </DockPanel>
