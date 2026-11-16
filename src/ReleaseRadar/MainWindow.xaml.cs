@@ -193,7 +193,8 @@ public partial class MainWindow : Window
 
     private Button BuildCard(GameRelease game)
     {
-        var (background, accent, label) = Colours(game.WishlistRank);
+        var band = Ranking.Band(game.WishlistRank);
+        var (background, accent, label) = Colours(band);
         var trend = Ranking.GetTrend(game, MetricsDate);
         var button = new Button
         {
@@ -203,11 +204,11 @@ public partial class MainWindow : Window
         };
         AutomationProperties.SetName(button, $"{game.Name}, {game.ReleaseDate:dd MMMM yyyy}, {RankText(game)}{(trend?.IsTrending == true ? ", trending" : "")}");
         var content = new StackPanel();
-        content.Children.Add(new TextBlock { Text = game.Name, Foreground = Brush("#F3EFF0"), FontSize = 11, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap });
+        content.Children.Add(new TextBlock { Text = game.Name, Foreground = Brush(band == RankBand.Lower ? "#10213C" : "#F3EFF0"), FontSize = 11, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap });
         var row = new DockPanel { Margin = new(0,1,0,0) };
         if (trend?.IsTrending == true)
         {
-            var flame = new System.Windows.Shapes.Path { Data = Geometry.Parse("M 7,0 C 9,4 12,5 12,9 C 12,13 9,15 6,15 C 2,15 0,12 0,9 C 0,6 2,4 3,3 C 3,6 4,7 5,7 C 7,6 8,3 7,0 Z"), Fill = Brush("#FFB679"), Width = 10, Height = 12, Stretch = Stretch.Uniform, ToolTip = TrendText(game) };
+            var flame = new System.Windows.Shapes.Path { Data = Geometry.Parse("M 7,0 C 9,4 12,5 12,9 C 12,13 9,15 6,15 C 2,15 0,12 0,9 C 0,6 2,4 3,3 C 3,6 4,7 5,7 C 7,6 8,3 7,0 Z"), Fill = Brush(band == RankBand.Lower ? "#8A3D00" : "#FFB679"), Width = 10, Height = 12, Stretch = Stretch.Uniform, ToolTip = TrendText(game) };
             AutomationProperties.SetName(flame, "Trending");
             DockPanel.SetDock(flame, Dock.Right); row.Children.Add(flame);
         }
@@ -217,11 +218,11 @@ public partial class MainWindow : Window
         return button;
     }
 
-    private static (string Background, string Accent, string Label) Colours(int? rank) => Ranking.Band(rank) switch
+    private static (string Background, string Accent, string Label) Colours(RankBand band) => band switch
     {
         RankBand.High => ("#39232C", "#FF929A", "HIGH"),
         RankBand.Middle => ("#382B22", "#F4B57E", "MID"),
-        RankBand.Lower => ("#333125", "#E9D989", "LOWER"),
+        RankBand.Lower => ("#A8D5FF", "#214D78", "LOWER"),
         _ => ("#263140", "#A8B9CF", "UNRANKED")
     };
     private static SolidColorBrush Brush(string value) => (SolidColorBrush)new BrushConverter().ConvertFromString(value)!;
@@ -243,6 +244,7 @@ public partial class MainWindow : Window
         ModalMetrics.Text = RankText(game) + "\n" + TrendText(game);
         ModalBody.Text = "Save an all-day release reminder in Outlook, or discover the game through trailers on YouTube.";
         OutlookButton.Visibility = LearnMoreButton.Visibility = Visibility.Visible;
+        ViewOnSteamButton.Visibility = !App.Demo && game.AppId > 0 ? Visibility.Visible : Visibility.Collapsed;
         OutlookButton.IsEnabled = game.ReleaseDate.HasValue;
         ActionStatus.Text = game.ReleaseDate.HasValue ? "Dates can change. Imported calendar events do not update automatically." : "A confirmed date is needed to create a calendar event.";
         ModalLayer.Visibility = Visibility.Visible;
@@ -255,9 +257,9 @@ public partial class MainWindow : Window
         selected = null; focusBeforeModal = sender as Button;
         ModalEyebrow.Text = "A LITTLE LESS NOISE"; ModalTitle.Text = "A calendar for what’s next.";
         ModalDate.Text = "Three releases per day. Ranked by anticipation.";
-        ModalMetrics.Text = "RED    #1–500\nORANGE    #501–1,500\nYELLOW    #1,501+\n🔥    250+ followers AND 10% growth in seven days";
+        ModalMetrics.Text = "RED    #1–500\nORANGE    #501–1,500\nLIGHT BLUE    #1,501+\n🔥    250+ followers AND 10% growth in seven days";
         ModalBody.Text = "Wishlist positions come from Steam’s public Top Wishlists order, before filtering to games. Steam’s regional visibility and omissions can affect positions; these are not wishlist counts.\n\nGames only, including Early Access; no demos or DLC. Unranked games follow ranked games, ordered by available follower counts, then title. No minimum popularity cutoff is applied.\n\nRefresh reads the wishlist catalogue and followers for this month’s displayed picks. Seven-day trends require observations on both dates. Other months remain browsable from the cache. Older releases are retained only if previously recorded.\n\nOpening the app and changing months make no network requests. Only Refresh updates an existing cache.";
-        OutlookButton.Visibility = LearnMoreButton.Visibility = Visibility.Collapsed; ActionStatus.Text = "";
+        OutlookButton.Visibility = LearnMoreButton.Visibility = ViewOnSteamButton.Visibility = Visibility.Collapsed; ActionStatus.Text = "";
         ModalLayer.Visibility = Visibility.Visible;
         KeyboardNavigation.SetTabNavigation(ModalLayer, KeyboardNavigationMode.Cycle);
         ModalLayer.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
@@ -288,6 +290,20 @@ public partial class MainWindow : Window
         if (selected is null) return;
         try { Process.Start(new ProcessStartInfo(CalendarExport.YoutubeUrl(selected.Name)) { UseShellExecute = true }); }
         catch (System.ComponentModel.Win32Exception) { ActionStatus.Text = "Could not open your browser. Search YouTube for “" + selected.Name + " trailer”."; }
+    }
+
+    private void ViewOnSteam_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.Demo || selected is not { AppId: > 0 } game) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo($"steam://store/{game.AppId}") { UseShellExecute = true });
+            ActionStatus.Text = "";
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            ActionStatus.Text = "Could not open Steam. Make sure the Steam desktop app is installed.";
+        }
     }
 
     private void CloseModal() { ModalLayer.Visibility = Visibility.Collapsed; selected = null; focusBeforeModal?.Focus(); }
