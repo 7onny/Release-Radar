@@ -42,7 +42,7 @@ Check(SteamParser.ParseDate("17 Nov, 2026")==day && SteamParser.ParseDate("Nov 1
 var fixture = "<a data-ds-appid=\"123\" class=\"search_result_row ds_collapse_flag\"><span class=\"title\">Cats &amp; Dogs</span><div class=\"search_released responsive_secondrow\">17 Nov, 2026</div></a>";
 var parsed = SteamParser.Parse(fixture,500).Single();
 Check(parsed.AppId==123 && parsed.Position==501 && parsed.Name=="Cats & Dogs" && parsed.ReleaseDate==day,"HTML parsing preserves absolute page position and entities");
-const string earlyAccessPage = "<div id=\"earlyAccessHeader\" class=\"early_access_header\">\n<h2 class=\"inset\">Coming Soon To Early Access</h2></div>";
+const string earlyAccessPage = "<div id=\"earlyAccessHeader\" class=\"early_access_header\">\n<div class=\"heading\">\n<h2 class=\"inset\">Coming Soon To Early Access</h2></div></div>";
 const string leavingEarlyAccessPage = "<div class=\"leaving_early_access\"><h2>Leaving Early Access: 17 Nov, 2026</h3></div>";
 Check(SteamParser.ParseEarlyAccessFullReleaseDate(leavingEarlyAccessPage) == day &&
     SteamParser.ParseEarlyAccessFullReleaseDate(leavingEarlyAccessPage.Replace("17 Nov, 2026", "November 2026")) is null &&
