@@ -13,7 +13,9 @@ public sealed class SteamService(HttpClient client)
         var gamesOnly = await ReadSearchAsync(true, progress, ct);
         var ranks = ranked.Where(r => r.AppId.HasValue).GroupBy(r => r.AppId!.Value)
             .ToDictionary(g => g.Key, g => g.Min(r => r.Position));
-        var old = (previous?.Games ?? []).GroupBy(g => g.AppId).ToDictionary(g => g.Key, g => g.First());
+        var previousGames = previous?.Games ?? [];
+        var old = previousGames.Where(g => !g.IsFullReleaseFromEarlyAccess).GroupBy(g => g.AppId).ToDictionary(g => g.Key, g => g.First());
+        var previousFullReleases = previousGames.Where(g => g.IsFullReleaseFromEarlyAccess).ToList();
         var now = DateTimeOffset.UtcNow;
         var today = Ranking.LondonDate(now);
         var games = gamesOnly.Where(r => r.AppId.HasValue).DistinctBy(r => r.AppId).Select(row => new GameRelease
@@ -25,9 +27,15 @@ public sealed class SteamService(HttpClient client)
         }).ToList();
         if (games.Count == 0) throw new InvalidDataException("Steam returned no games. Your saved calendar has been kept.");
 
+        var warnings = new List<string>();
+        var fullReleases = await ReadFullReleasesAsync(previousGames, ranks, today, warnings, progress, ct);
+        fullReleases.AddRange(previousFullReleases.Where(g => g.ReleaseDate < today &&
+            !fullReleases.Any(current => current.AppId == g.AppId)));
+        var fullReleaseDates = fullReleases.Select(g => (g.AppId, g.ReleaseDate)).ToHashSet();
+        games.RemoveAll(g => fullReleaseDates.Contains((g.AppId, g.ReleaseDate)));
+        games.AddRange(fullReleases);
         // Store only counts, never member IDs. Only fetch metrics for cards visible in the selected month.
         var picks = PicksForMonth(games, visibleMonth).ToList();
-        var warnings = new List<string>();
         var failed = 0;
         for (var index = 0; index < picks.Count; index++)
         {
@@ -56,20 +64,80 @@ public sealed class SteamService(HttpClient client)
         if (failed > 0) warnings.Add($"Follower data unavailable for {failed} displayed games. Those games have no new trend observation.");
 
         // Use the final card selection in case fresh follower counts change the order of unranked games.
-        var upcomingPicks = PicksForMonth(games, visibleMonth).Where(g => g.ReleaseDate >= today).ToList();
+        var upcomingPicks = PicksForMonth(games, visibleMonth).Where(g => g.ReleaseDate >= today && !g.IsFullReleaseFromEarlyAccess).ToList();
         var confirmed = await ReadEarlyAccessLaunchesAsync(upcomingPicks, warnings, progress, ct);
         var checkedIds = upcomingPicks.Select(g => g.AppId).ToHashSet();
         for (var index = 0; index < games.Count; index++)
         {
             var game = games[index];
+            if (game.IsFullReleaseFromEarlyAccess) continue;
             var isEarlyAccessLaunch = checkedIds.Contains(game.AppId) ? confirmed.Contains(game.AppId)
                 : old.TryGetValue(game.AppId, out var known) && known.ReleaseDate == game.ReleaseDate && known.IsEarlyAccessLaunch;
             if (isEarlyAccessLaunch) games[index] = game with { IsEarlyAccessLaunch = true };
         }
         // Preserve previously seen past releases, but replace/remove future listings so delays are respected.
-        var ids = games.Select(g => g.AppId).ToHashSet();
-        games.AddRange(old.Values.Where(g => g.ReleaseDate < today && !ids.Contains(g.AppId)));
+        var ids = games.Where(g => !g.IsFullReleaseFromEarlyAccess).Select(g => g.AppId).ToHashSet();
+        games.AddRange(old.Values.Where(g => g.ReleaseDate < today && !ids.Contains(g.AppId) &&
+            !fullReleaseDates.Contains((g.AppId, g.ReleaseDate))));
         return new CalendarCache { UpdatedAt = now, Games = games, RankedProducts = ranked.Count, Warnings = warnings };
+    }
+
+    private async Task<List<GameRelease>> ReadFullReleasesAsync(List<GameRelease> previous, Dictionary<int, int> ranks,
+        DateOnly today, List<string> warnings, IProgress<string>? progress, CancellationToken ct)
+    {
+        const int discoveryLimit = 50;
+        var candidates = previous.Where(g => (g.IsEarlyAccessLaunch && g.ReleaseDate <= today) ||
+            (g.IsFullReleaseFromEarlyAccess && g.ReleaseDate >= today)).ToList();
+        try
+        {
+            var body = await GetAsync($"https://store.steampowered.com/search/results/?start=0&count={discoveryLimit}&category1=998&genre=Early%20Access&infinite=1&cc=gb&l=english", ct);
+            using var json = JsonDocument.Parse(body);
+            if (!json.RootElement.TryGetProperty("results_html", out var html) || html.ValueKind != JsonValueKind.String)
+                throw new InvalidDataException("Invalid Early Access search response.");
+            candidates.AddRange(SteamParser.Parse(html.GetString()!, 0)
+                .Where(row => row.AppId.HasValue && row.ReleaseDate <= today)
+                .Select(row => new GameRelease { AppId = row.AppId!.Value, Name = row.Name }));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidDataException or
+                                    System.Text.RegularExpressions.RegexMatchTimeoutException ||
+                                    ex is OperationCanceledException && !ct.IsCancellationRequested)
+        {
+            warnings.Add("Steam's Early Access search was unavailable. Some 1.0 releases may be missing.");
+        }
+
+        var result = new List<GameRelease>();
+        var known = previous.ToLookup(g => g.AppId);
+        var picks = candidates.DistinctBy(g => g.AppId).ToList();
+        var failed = 0;
+        for (var index = 0; index < picks.Count; index++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var game = picks[index];
+            progress?.Report($"Checking 1.0 releases · {index + 1}/{picks.Count} · {game.Name}");
+            try
+            {
+                var html = await GetAsync(game.StoreUrl + "?cc=gb&l=english", ct);
+                if (SteamParser.ParseEarlyAccessFullReleaseDate(html) is { } date && date >= today)
+                {
+                    result.Add(game with
+                    {
+                        ReleaseDate = date, ReleaseText = date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                        IsEarlyAccessLaunch = false, IsFullReleaseFromEarlyAccess = true,
+                        WishlistRank = ranks.TryGetValue(game.AppId, out var rank) ? rank : null,
+                        Followers = known[game.AppId].SelectMany(g => g.Followers).Where(f => f.Date >= today.AddDays(-45))
+                            .DistinctBy(f => f.Date).ToList()
+                    });
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException or System.Text.RegularExpressions.RegexMatchTimeoutException ||
+                                        ex is OperationCanceledException && !ct.IsCancellationRequested)
+            {
+                if (++failed >= 5) break;
+            }
+            if (index + 1 < picks.Count) await Task.Delay(1200, ct);
+        }
+        if (failed > 0) warnings.Add("Some 1.0 release dates could not be verified on Steam.");
+        return result;
     }
 
     private static IEnumerable<GameRelease> PicksForMonth(List<GameRelease> games, DateOnly month) =>

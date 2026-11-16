@@ -195,7 +195,8 @@ public partial class MainWindow : Window
     {
         var (background, accent, label) = Colours(game.WishlistRank);
         var trend = Ranking.GetTrend(game, MetricsDate);
-        var launchType = game.IsEarlyAccessLaunch ? " · Early Access launch" : "";
+        var (badgeText, badgeDescription) = ReleaseBadge(game);
+        var launchType = badgeDescription is null ? "" : " · " + badgeDescription;
         var button = new Button
         {
             Background = Brush(background), BorderBrush = Brush(accent), BorderThickness = new(3,0,0,0),
@@ -212,10 +213,10 @@ public partial class MainWindow : Window
             AutomationProperties.SetName(flame, "Trending");
             DockPanel.SetDock(flame, Dock.Right); row.Children.Add(flame);
         }
-        if (game.IsEarlyAccessLaunch)
+        if (badgeText is not null)
         {
-            var badge = new TextBlock { Text = "EA", Foreground = Brush("#D9E1ED"), FontSize = 9,
-                FontWeight = FontWeights.SemiBold, Margin = new(4,0,4,0), ToolTip = "Early Access launch" };
+            var badge = new TextBlock { Text = badgeText, Foreground = Brush("#D9E1ED"), FontSize = 9,
+                FontWeight = FontWeights.SemiBold, Margin = new(4,0,4,0), ToolTip = badgeDescription };
             DockPanel.SetDock(badge, Dock.Right);
             row.Children.Add(badge);
         }
@@ -224,6 +225,13 @@ public partial class MainWindow : Window
         button.Click += (_, _) => OpenGame(game, button);
         return button;
     }
+
+    private static (string? Text, string? Description) ReleaseBadge(GameRelease game) => game switch
+    {
+        { IsFullReleaseFromEarlyAccess: true } => ("1.0", "Full release from Early Access"),
+        { IsEarlyAccessLaunch: true } => ("EA", "Early Access launch"),
+        _ => (null, null)
+    };
 
     private static (string Background, string Accent, string Label) Colours(int? rank) => Ranking.Band(rank) switch
     {
@@ -248,7 +256,7 @@ public partial class MainWindow : Window
         selected = game; focusBeforeModal = origin;
         ModalEyebrow.Text = "RELEASE DETAILS"; ModalTitle.Text = game.Name;
         ModalDate.Text = game.ReleaseDate?.ToString("dddd, d MMMM yyyy", Culture) ?? game.ReleaseText;
-        if (game.IsEarlyAccessLaunch) ModalDate.Text += " · Early Access launch";
+        if (ReleaseBadge(game).Description is { } launchType) ModalDate.Text += " · " + launchType;
         ModalMetrics.Text = RankText(game) + "\n" + TrendText(game);
         ModalBody.Text = "Save an all-day release reminder in Outlook, or discover the game through trailers on YouTube.";
         OutlookButton.Visibility = LearnMoreButton.Visibility = Visibility.Visible;

@@ -33,6 +33,7 @@
           <TextBlock Text="●  MID  501–1,500" Foreground="#F6B176" FontSize="11" Margin="0,0,22,0"/>
           <TextBlock Text="●  LOWER  1,501+" Foreground="#92B4D5" FontSize="11" Margin="0,0,22,0"/>
           <TextBlock Text="EA  EARLY ACCESS LAUNCH" Foreground="#D9E1ED" FontSize="11" Margin="0,0,22,0"/>
+          <TextBlock Text="1.0  FULL RELEASE FROM EARLY ACCESS" Foreground="#D9E1ED" FontSize="11" Margin="0,0,22,0"/>
           <TextBlock Text="🔥  TRENDING" Foreground="#D9E1ED" FontSize="11" ToolTip="At least 250 new followers AND 10% growth over seven days."/>
         </WrapPanel>
       </DockPanel>
