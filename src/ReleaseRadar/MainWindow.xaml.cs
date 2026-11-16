@@ -200,7 +200,7 @@ public partial class MainWindow : Window
         var button = new Button
         {
             Background = Brush(background), BorderBrush = Brush(accent), BorderThickness = new(3,0,0,0),
-            Padding = new(8,4,6,4), Margin = new(0,0,0,3), HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Padding = new(8,3,6,3), Margin = new(0,0,0,2), HorizontalContentAlignment = HorizontalAlignment.Stretch,
             ToolTip = $"{game.Name}{launchType}\n{RankText(game)}\n{TrendText(game)}"
         };
         AutomationProperties.SetName(button, $"{game.Name}, {game.ReleaseDate:dd MMMM yyyy}{launchType}, {RankText(game)}{(trend?.IsTrending == true ? ", trending" : "")}");
