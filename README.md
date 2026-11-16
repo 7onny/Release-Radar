@@ -14,7 +14,7 @@ Data and window preferences live in `%LOCALAPPDATA%/ReleaseRadar`. Optional `--d
 
 - Games only, including Early Access; Steam's game filter excludes DLC, demos and software.
 - Group exact release dates by day, take the best three wishlist positions. Rankless entries follow ranked entries, sorted by the latest known follower count, then title. There is no minimum popularity cutoff.
-- Red: 1–500; orange: 501–1,500; light blue: 1,501+. Unknown rank: neutral.
+- Red: 1–500; orange: 501–1,500; muted blue: 1,501+. Unknown rank: neutral.
 - Flame: at least 250 net followers **and** 10% growth over seven days. Growth uses the starting count. Observations must exist for the snapshot date and exactly seven days earlier. Missing or zero baselines yield no badge. No scheduled background collection occurs: refresh regularly to accumulate history.
 - Relative monthly/quarterly/TBA dates are not invented: they appear in the unconfirmed list (top 20).
 - Outlook action saves an all-day `.ics` file, then opens the system's calendar association. Choose Outlook if prompted; review and save/import there. It does not write directly to a Microsoft account. Exported reminders do not auto-update after release delays. The end date is exclusive and the event UID is stable per Steam app.

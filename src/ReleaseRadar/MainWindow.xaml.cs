@@ -193,8 +193,7 @@ public partial class MainWindow : Window
 
     private Button BuildCard(GameRelease game)
     {
-        var band = Ranking.Band(game.WishlistRank);
-        var (background, accent, label) = Colours(band);
+        var (background, accent, label) = Colours(game.WishlistRank);
         var trend = Ranking.GetTrend(game, MetricsDate);
         var button = new Button
         {
@@ -204,11 +203,11 @@ public partial class MainWindow : Window
         };
         AutomationProperties.SetName(button, $"{game.Name}, {game.ReleaseDate:dd MMMM yyyy}, {RankText(game)}{(trend?.IsTrending == true ? ", trending" : "")}");
         var content = new StackPanel();
-        content.Children.Add(new TextBlock { Text = game.Name, Foreground = Brush(band == RankBand.Lower ? "#10213C" : "#F3EFF0"), FontSize = 11, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap });
+        content.Children.Add(new TextBlock { Text = game.Name, Foreground = Brush("#F3EFF0"), FontSize = 11, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap });
         var row = new DockPanel { Margin = new(0,1,0,0) };
         if (trend?.IsTrending == true)
         {
-            var flame = new System.Windows.Shapes.Path { Data = Geometry.Parse("M 7,0 C 9,4 12,5 12,9 C 12,13 9,15 6,15 C 2,15 0,12 0,9 C 0,6 2,4 3,3 C 3,6 4,7 5,7 C 7,6 8,3 7,0 Z"), Fill = Brush(band == RankBand.Lower ? "#8A3D00" : "#FFB679"), Width = 10, Height = 12, Stretch = Stretch.Uniform, ToolTip = TrendText(game) };
+            var flame = new System.Windows.Shapes.Path { Data = Geometry.Parse("M 7,0 C 9,4 12,5 12,9 C 12,13 9,15 6,15 C 2,15 0,12 0,9 C 0,6 2,4 3,3 C 3,6 4,7 5,7 C 7,6 8,3 7,0 Z"), Fill = Brush("#FFB679"), Width = 10, Height = 12, Stretch = Stretch.Uniform, ToolTip = TrendText(game) };
             AutomationProperties.SetName(flame, "Trending");
             DockPanel.SetDock(flame, Dock.Right); row.Children.Add(flame);
         }
@@ -218,11 +217,11 @@ public partial class MainWindow : Window
         return button;
     }
 
-    private static (string Background, string Accent, string Label) Colours(RankBand band) => band switch
+    private static (string Background, string Accent, string Label) Colours(int? rank) => Ranking.Band(rank) switch
     {
-        RankBand.High => ("#39232C", "#FF929A", "HIGH"),
+        RankBand.High => ("#702D40", "#FF9DAA", "HIGH"),
         RankBand.Middle => ("#382B22", "#F4B57E", "MID"),
-        RankBand.Lower => ("#A8D5FF", "#214D78", "LOWER"),
+        RankBand.Lower => ("#233348", "#92B4D5", "LOWER"),
         _ => ("#263140", "#A8B9CF", "UNRANKED")
     };
     private static SolidColorBrush Brush(string value) => (SolidColorBrush)new BrushConverter().ConvertFromString(value)!;
@@ -257,7 +256,7 @@ public partial class MainWindow : Window
         selected = null; focusBeforeModal = sender as Button;
         ModalEyebrow.Text = "A LITTLE LESS NOISE"; ModalTitle.Text = "A calendar for what’s next.";
         ModalDate.Text = "Three releases per day. Ranked by anticipation.";
-        ModalMetrics.Text = "RED    #1–500\nORANGE    #501–1,500\nLIGHT BLUE    #1,501+\n🔥    250+ followers AND 10% growth in seven days";
+        ModalMetrics.Text = "RED    #1–500\nORANGE    #501–1,500\nBLUE    #1,501+\n🔥    250+ followers AND 10% growth in seven days";
         ModalBody.Text = "Wishlist positions come from Steam’s public Top Wishlists order, before filtering to games. Steam’s regional visibility and omissions can affect positions; these are not wishlist counts.\n\nGames only, including Early Access; no demos or DLC. Unranked games follow ranked games, ordered by available follower counts, then title. No minimum popularity cutoff is applied.\n\nRefresh reads the wishlist catalogue and followers for this month’s displayed picks. Seven-day trends require observations on both dates. Other months remain browsable from the cache. Older releases are retained only if previously recorded.\n\nOpening the app and changing months make no network requests. Only Refresh updates an existing cache.";
         OutlookButton.Visibility = LearnMoreButton.Visibility = ViewOnSteamButton.Visibility = Visibility.Collapsed; ActionStatus.Text = "";
         ModalLayer.Visibility = Visibility.Visible;
