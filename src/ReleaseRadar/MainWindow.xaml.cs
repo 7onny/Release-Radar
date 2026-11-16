@@ -219,9 +219,9 @@ public partial class MainWindow : Window
 
     private static (string Background, string Accent, string Label) Colours(int? rank) => Ranking.Band(rank) switch
     {
-        RankBand.High => ("#39232C", "#FF929A", "HIGH"),
+        RankBand.High => ("#702D40", "#FF9DAA", "HIGH"),
         RankBand.Middle => ("#382B22", "#F4B57E", "MID"),
-        RankBand.Lower => ("#333125", "#E9D989", "LOWER"),
+        RankBand.Lower => ("#233348", "#92B4D5", "LOWER"),
         _ => ("#263140", "#A8B9CF", "UNRANKED")
     };
     private static SolidColorBrush Brush(string value) => (SolidColorBrush)new BrushConverter().ConvertFromString(value)!;
@@ -243,6 +243,7 @@ public partial class MainWindow : Window
         ModalMetrics.Text = RankText(game) + "\n" + TrendText(game);
         ModalBody.Text = "Save an all-day release reminder in Outlook, or discover the game through trailers on YouTube.";
         OutlookButton.Visibility = LearnMoreButton.Visibility = Visibility.Visible;
+        ViewOnSteamButton.Visibility = !App.Demo && game.AppId > 0 ? Visibility.Visible : Visibility.Collapsed;
         OutlookButton.IsEnabled = game.ReleaseDate.HasValue;
         ActionStatus.Text = game.ReleaseDate.HasValue ? "Dates can change. Imported calendar events do not update automatically." : "A confirmed date is needed to create a calendar event.";
         ModalLayer.Visibility = Visibility.Visible;
@@ -255,9 +256,9 @@ public partial class MainWindow : Window
         selected = null; focusBeforeModal = sender as Button;
         ModalEyebrow.Text = "A LITTLE LESS NOISE"; ModalTitle.Text = "A calendar for what’s next.";
         ModalDate.Text = "Three releases per day. Ranked by anticipation.";
-        ModalMetrics.Text = "RED    #1–500\nORANGE    #501–1,500\nYELLOW    #1,501+\n🔥    250+ followers AND 10% growth in seven days";
+        ModalMetrics.Text = "RED    #1–500\nORANGE    #501–1,500\nBLUE    #1,501+\n🔥    250+ followers AND 10% growth in seven days";
         ModalBody.Text = "Wishlist positions come from Steam’s public Top Wishlists order, before filtering to games. Steam’s regional visibility and omissions can affect positions; these are not wishlist counts.\n\nGames only, including Early Access; no demos or DLC. Unranked games follow ranked games, ordered by available follower counts, then title. No minimum popularity cutoff is applied.\n\nRefresh reads the wishlist catalogue and followers for this month’s displayed picks. Seven-day trends require observations on both dates. Other months remain browsable from the cache. Older releases are retained only if previously recorded.\n\nOpening the app and changing months make no network requests. Only Refresh updates an existing cache.";
-        OutlookButton.Visibility = LearnMoreButton.Visibility = Visibility.Collapsed; ActionStatus.Text = "";
+        OutlookButton.Visibility = LearnMoreButton.Visibility = ViewOnSteamButton.Visibility = Visibility.Collapsed; ActionStatus.Text = "";
         ModalLayer.Visibility = Visibility.Visible;
         KeyboardNavigation.SetTabNavigation(ModalLayer, KeyboardNavigationMode.Cycle);
         ModalLayer.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
@@ -288,6 +289,20 @@ public partial class MainWindow : Window
         if (selected is null) return;
         try { Process.Start(new ProcessStartInfo(CalendarExport.YoutubeUrl(selected.Name)) { UseShellExecute = true }); }
         catch (System.ComponentModel.Win32Exception) { ActionStatus.Text = "Could not open your browser. Search YouTube for “" + selected.Name + " trailer”."; }
+    }
+
+    private void ViewOnSteam_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.Demo || selected is not { AppId: > 0 } game) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo($"steam://store/{game.AppId}") { UseShellExecute = true });
+            ActionStatus.Text = "";
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            ActionStatus.Text = "Could not open Steam. Make sure the Steam desktop app is installed.";
+        }
     }
 
     private void CloseModal() { ModalLayer.Visibility = Visibility.Collapsed; selected = null; focusBeforeModal?.Focus(); }
