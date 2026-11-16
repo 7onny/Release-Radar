@@ -32,7 +32,7 @@ public static class SteamParser
     }
 
     public static bool IsUpcomingEarlyAccessLaunch(string html) => Matches(html,
-        "<div\\b[^>]*\\bid=\"earlyAccessHeader\"[^>]*>\\s*<h2\\b[^>]*>\\s*Coming Soon To Early Access\\s*</h2>").Count > 0;
+        "<div\\b[^>]*\\bid=\"earlyAccessHeader\"[^>]*>\\s*(?:<div\\b[^>]*\\bclass=\"heading\"[^>]*>\\s*)?<h2\\b[^>]*>\\s*Coming Soon To Early Access\\s*</h2>").Count > 0;
 
     public static DateOnly? ParseEarlyAccessFullReleaseDate(string html)
     {
