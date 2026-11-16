@@ -42,9 +42,21 @@ Check(SteamParser.ParseDate("17 Nov, 2026")==day && SteamParser.ParseDate("Nov 1
 var fixture = "<a data-ds-appid=\"123\" class=\"search_result_row ds_collapse_flag\"><span class=\"title\">Cats &amp; Dogs</span><div class=\"search_released responsive_secondrow\">17 Nov, 2026</div></a>";
 var parsed = SteamParser.Parse(fixture,500).Single();
 Check(parsed.AppId==123 && parsed.Position==501 && parsed.Name=="Cats & Dogs" && parsed.ReleaseDate==day,"HTML parsing preserves absolute page position and entities");
+const string earlyAccessPage = "<div id=\"earlyAccessHeader\" class=\"early_access_header\">\n<h2 class=\"inset\">Coming Soon To Early Access</h2></div>";
+const string leavingEarlyAccessPage = "<div class=\"leaving_early_access\"><h2>Leaving Early Access: 17 Nov, 2026</h3></div>";
+Check(SteamParser.ParseEarlyAccessFullReleaseDate(leavingEarlyAccessPage) == day &&
+    SteamParser.ParseEarlyAccessFullReleaseDate(leavingEarlyAccessPage.Replace("17 Nov, 2026", "November 2026")) is null &&
+    SteamParser.ParseEarlyAccessFullReleaseDate(earlyAccessPage) is null, "Only an exact Steam Leaving Early Access date schedules 1.0");
+Check(SteamParser.IsUpcomingEarlyAccessLaunch(earlyAccessPage), "Steam's upcoming Early Access heading confirms a launch");
+Check(!SteamParser.IsUpcomingEarlyAccessLaunch(earlyAccessPage.Replace("Coming Soon To Early Access", "Early Access Game")) &&
+    !SteamParser.IsUpcomingEarlyAccessLaunch("<h2>Coming Soon To Early Access</h2><p>Early Access</p>"),
+    "Already playable games and unrelated Early Access text have no launch badge");
 Check(SteamParser.ParseFollowers("<memberList><groupDetails><memberCount>42</memberCount></groupDetails><memberCount>999</memberCount></memberList>")==42,"Follower parsing uses game-hub count");
 var exported = CalendarExport.Ics(Game(42,1) with { Name = "Cats, Dogs; & 🐈\n新" + new string('é',100) },DateTimeOffset.UtcNow);
 Check(exported.Contains("DTSTART;VALUE=DATE:20261117\r\nDTEND;VALUE=DATE:20261118") && exported.Contains("UID:steam-42@release-radar.local"),"Outlook all-day event uses exclusive end date and stable UID");
+var fullReleaseIcs = CalendarExport.Ics(Game(42, 1) with { IsFullReleaseFromEarlyAccess = true }, DateTimeOffset.UtcNow);
+Check(fullReleaseIcs.Contains("UID:steam-42-1.0@release-radar.local") && fullReleaseIcs.Contains("Steam 1.0 release"),
+    "1.0 reminders have a distinct stable UID and title");
 Check(exported.Split("\r\n").All(l=>Encoding.UTF8.GetByteCount(l)<=75) && exported.Contains("Cats\\, Dogs\\;"),"ICS escapes text and folds UTF-8 without splitting characters");
 Check(CalendarExport.YoutubeUrl("Cats & Dogs").EndsWith("Cats%20%26%20Dogs%20trailer"),"YouTube query safely encoded");
 var temp = Path.Combine(Path.GetTempPath(),"release-radar-tests-"+Guid.NewGuid().ToString("N"));
@@ -57,9 +69,27 @@ try
     using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
     try { await cacheStore.SaveAsync(original with { Games=[] }, cancelled.Token); } catch (OperationCanceledException) { }
     Check((await cacheStore.LoadAsync())?.Games.Count==1,"Interrupted write preserves existing cache");
-    using var mock = new HttpClient(new StubHandler(fixture));
-    var refreshed = await new SteamService(mock).RefreshAsync(original,day,null,CancellationToken.None);
+    var upcomingDay = Ranking.LondonDate(DateTimeOffset.UtcNow).AddDays(1);
+    var upcomingFixture = fixture.Replace("17 Nov, 2026", upcomingDay.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+    using var mock = new HttpClient(new StubHandler(upcomingFixture, earlyAccessPage));
+    var refreshed = await new SteamService(mock).RefreshAsync(original,upcomingDay,null,CancellationToken.None);
     Check(refreshed.Games.Count==1 && refreshed.Games[0].WishlistRank==1 && refreshed.Games[0].Followers.Count==1,"End-to-end refresh combines ranking, game filter and followers");
+    await cacheStore.SaveAsync(refreshed);
+    Check((await cacheStore.LoadAsync())?.Games.Single().IsEarlyAccessLaunch == true, "Confirmed badge survives cache reload");
+    using var unavailableStorePage = new HttpClient(new StubHandler(upcomingFixture));
+    var partial = await new SteamService(unavailableStorePage).RefreshAsync(refreshed, upcomingDay, null, CancellationToken.None);
+    Check(!partial.Games.Single().IsEarlyAccessLaunch && partial.Games.Single().Followers.Count == 1 &&
+        partial.Warnings.Any(w => w.StartsWith("Early Access status unavailable", StringComparison.Ordinal)),
+        "Store lookup failure hides the badge and preserves the refreshed calendar and followers");
+    var originalLaunch = Game(123, 12) with { ReleaseDate = upcomingDay.AddDays(-2), IsEarlyAccessLaunch = true };
+    var fullReleasePage = leavingEarlyAccessPage.Replace("17 Nov, 2026", upcomingDay.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+    var discoveredGame = fixture.Replace("123", "456").Replace("17 Nov, 2026", "17 Nov, 2023");
+    using var graduation = new HttpClient(new StubHandler(upcomingFixture, fullReleasePage, discoveredGame));
+    var milestones = await new SteamService(graduation).RefreshAsync(original with { Games = [originalLaunch] }, upcomingDay, null, CancellationToken.None);
+    Check(milestones.Games.Count == 3 && milestones.Games.Any(g => g.AppId == 123 && g.IsEarlyAccessLaunch && g.ReleaseDate == originalLaunch.ReleaseDate) &&
+        milestones.Games.Count(g => g.IsFullReleaseFromEarlyAccess && g.ReleaseDate == upcomingDay) == 2 &&
+        milestones.Games.Single(g => g.AppId == 456).WishlistRank is null,
+        "Refresh retains the earlier EA tile, replaces a duplicate same-day listing, and discovers unranked 1.0 releases");
     using var broken = new HttpClient(new StubHandler(""));
     var rejected = false;
     try { await new SteamService(broken).RefreshAsync(original,day,null,CancellationToken.None); } catch (InvalidDataException) { rejected=true; }
@@ -68,10 +98,16 @@ try
 finally { if (Directory.Exists(temp)) Directory.Delete(temp,true); }
 Console.WriteLine($"\n{passed} checks passed.");
 
-sealed class StubHandler(string fixture) : HttpMessageHandler
+sealed class StubHandler(string fixture, string? storePage = null, string discoveryFixture = "") : HttpMessageHandler
 {
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancellationToken)
     {
+        if (request.RequestUri!.AbsolutePath.StartsWith("/app/", StringComparison.Ordinal))
+            return Task.FromResult(new HttpResponseMessage(storePage is null ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK)
+            { Content = new StringContent(storePage ?? "") });
+        if (request.RequestUri.Query.Contains("genre=Early", StringComparison.Ordinal))
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new StringContent(JsonSerializer.Serialize(new { success = 1, results_html = discoveryFixture })) });
         var content = request.RequestUri!.Host=="steamcommunity.com"
             ? "<memberList><groupDetails><memberCount>1000</memberCount></groupDetails></memberList>"
             : JsonSerializer.Serialize(new { success=1,total_count=1,results_html=fixture });

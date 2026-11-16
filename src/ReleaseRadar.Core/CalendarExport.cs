@@ -11,13 +11,15 @@ public static class CalendarExport
     public static string Ics(GameRelease game, DateTimeOffset now)
     {
         if (game.ReleaseDate is not { } date) throw new InvalidOperationException("A confirmed release date is required.");
+        var milestone = game.IsFullReleaseFromEarlyAccess ? "-1.0" : "";
+        var summary = game.IsFullReleaseFromEarlyAccess ? " — Steam 1.0 release" : " — Steam release";
         var lines = new[] {
             "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Release Radar//Games Calendar//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
-            "BEGIN:VEVENT", $"UID:steam-{game.AppId}@release-radar.local",
+            "BEGIN:VEVENT", $"UID:steam-{game.AppId}{milestone}@release-radar.local",
             "DTSTAMP:" + now.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture),
             "DTSTART;VALUE=DATE:" + date.ToString("yyyyMMdd", CultureInfo.InvariantCulture),
             "DTEND;VALUE=DATE:" + date.AddDays(1).ToString("yyyyMMdd", CultureInfo.InvariantCulture),
-            "SUMMARY:" + Escape(game.Name + " — Steam release"),
+            "SUMMARY:" + Escape(game.Name + summary),
             "DESCRIPTION:" + Escape("Release date listed by Steam. Dates may change; this imported event does not update automatically.\n" + game.StoreUrl),
             "URL:" + game.StoreUrl, "TRANSP:TRANSPARENT", "END:VEVENT", "END:VCALENDAR"
         };

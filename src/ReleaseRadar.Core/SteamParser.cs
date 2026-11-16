@@ -31,6 +31,15 @@ public static class SteamParser
         return rows;
     }
 
+    public static bool IsUpcomingEarlyAccessLaunch(string html) => Matches(html,
+        "<div\\b[^>]*\\bid=\"earlyAccessHeader\"[^>]*>\\s*<h2\\b[^>]*>\\s*Coming Soon To Early Access\\s*</h2>").Count > 0;
+
+    public static DateOnly? ParseEarlyAccessFullReleaseDate(string html)
+    {
+        var date = Matches(html, "<div\\b[^>]*\\bclass=\"leaving_early_access\"[^>]*>\\s*<h2\\b[^>]*>\\s*Leaving Early Access:\\s*([^<]+)</h[23]>").FirstOrDefault();
+        return date is null ? null : ParseDate(Text(date.Groups[1].Value));
+    }
+
     public static DateOnly? ParseDate(string text)
     {
         string[] formats = ["d MMM, yyyy", "dd MMM, yyyy", "MMM d, yyyy", "d MMM yyyy", "MMM dd, yyyy", "yyyy-MM-dd"];
