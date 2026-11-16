@@ -195,13 +195,14 @@ public partial class MainWindow : Window
     {
         var (background, accent, label) = Colours(game.WishlistRank);
         var trend = Ranking.GetTrend(game, MetricsDate);
+        var launchType = game.IsEarlyAccessLaunch ? " · Early Access launch" : "";
         var button = new Button
         {
             Background = Brush(background), BorderBrush = Brush(accent), BorderThickness = new(3,0,0,0),
             Padding = new(8,4,6,4), Margin = new(0,0,0,3), HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            ToolTip = $"{game.Name}\n{RankText(game)}\n{TrendText(game)}"
+            ToolTip = $"{game.Name}{launchType}\n{RankText(game)}\n{TrendText(game)}"
         };
-        AutomationProperties.SetName(button, $"{game.Name}, {game.ReleaseDate:dd MMMM yyyy}, {RankText(game)}{(trend?.IsTrending == true ? ", trending" : "")}");
+        AutomationProperties.SetName(button, $"{game.Name}, {game.ReleaseDate:dd MMMM yyyy}{launchType}, {RankText(game)}{(trend?.IsTrending == true ? ", trending" : "")}");
         var content = new StackPanel();
         content.Children.Add(new TextBlock { Text = game.Name, Foreground = Brush("#F3EFF0"), FontSize = 11, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap });
         var row = new DockPanel { Margin = new(0,1,0,0) };
@@ -210,6 +211,13 @@ public partial class MainWindow : Window
             var flame = new System.Windows.Shapes.Path { Data = Geometry.Parse("M 7,0 C 9,4 12,5 12,9 C 12,13 9,15 6,15 C 2,15 0,12 0,9 C 0,6 2,4 3,3 C 3,6 4,7 5,7 C 7,6 8,3 7,0 Z"), Fill = Brush("#FFB679"), Width = 10, Height = 12, Stretch = Stretch.Uniform, ToolTip = TrendText(game) };
             AutomationProperties.SetName(flame, "Trending");
             DockPanel.SetDock(flame, Dock.Right); row.Children.Add(flame);
+        }
+        if (game.IsEarlyAccessLaunch)
+        {
+            var badge = new TextBlock { Text = "EA", Foreground = Brush("#D9E1ED"), FontSize = 9,
+                FontWeight = FontWeights.SemiBold, Margin = new(4,0,4,0), ToolTip = "Early Access launch" };
+            DockPanel.SetDock(badge, Dock.Right);
+            row.Children.Add(badge);
         }
         row.Children.Add(new TextBlock { Text = game.WishlistRank is { } rank ? $"#{rank:N0}  ·  {label}" : "Rank unavailable", Foreground = Brush(accent), FontSize = 9, TextTrimming = TextTrimming.CharacterEllipsis });
         content.Children.Add(row); button.Content = content;
@@ -240,6 +248,7 @@ public partial class MainWindow : Window
         selected = game; focusBeforeModal = origin;
         ModalEyebrow.Text = "RELEASE DETAILS"; ModalTitle.Text = game.Name;
         ModalDate.Text = game.ReleaseDate?.ToString("dddd, d MMMM yyyy", Culture) ?? game.ReleaseText;
+        if (game.IsEarlyAccessLaunch) ModalDate.Text += " · Early Access launch";
         ModalMetrics.Text = RankText(game) + "\n" + TrendText(game);
         ModalBody.Text = "Save an all-day release reminder in Outlook, or discover the game through trailers on YouTube.";
         OutlookButton.Visibility = LearnMoreButton.Visibility = Visibility.Visible;

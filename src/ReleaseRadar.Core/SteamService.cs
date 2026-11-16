@@ -26,8 +26,7 @@ public sealed class SteamService(HttpClient client)
         if (games.Count == 0) throw new InvalidDataException("Steam returned no games. Your saved calendar has been kept.");
 
         // Store only counts, never member IDs. Only fetch metrics for cards visible in the selected month.
-        var picks = games.Where(g => g.ReleaseDate?.Year == visibleMonth.Year && g.ReleaseDate?.Month == visibleMonth.Month)
-            .GroupBy(g => g.ReleaseDate!.Value).SelectMany(g => Ranking.ForDay(g, g.Key)).ToList();
+        var picks = PicksForMonth(games, visibleMonth).ToList();
         var warnings = new List<string>();
         var failed = 0;
         for (var index = 0; index < picks.Count; index++)
@@ -55,10 +54,56 @@ public sealed class SteamService(HttpClient client)
             await Task.Delay(1200, ct);
         }
         if (failed > 0) warnings.Add($"Follower data unavailable for {failed} displayed games. Those games have no new trend observation.");
+
+        // Use the final card selection in case fresh follower counts change the order of unranked games.
+        var upcomingPicks = PicksForMonth(games, visibleMonth).Where(g => g.ReleaseDate >= today).ToList();
+        var confirmed = await ReadEarlyAccessLaunchesAsync(upcomingPicks, warnings, progress, ct);
+        var checkedIds = upcomingPicks.Select(g => g.AppId).ToHashSet();
+        for (var index = 0; index < games.Count; index++)
+        {
+            var game = games[index];
+            var isEarlyAccessLaunch = checkedIds.Contains(game.AppId) ? confirmed.Contains(game.AppId)
+                : old.TryGetValue(game.AppId, out var known) && known.ReleaseDate == game.ReleaseDate && known.IsEarlyAccessLaunch;
+            if (isEarlyAccessLaunch) games[index] = game with { IsEarlyAccessLaunch = true };
+        }
         // Preserve previously seen past releases, but replace/remove future listings so delays are respected.
         var ids = games.Select(g => g.AppId).ToHashSet();
         games.AddRange(old.Values.Where(g => g.ReleaseDate < today && !ids.Contains(g.AppId)));
         return new CalendarCache { UpdatedAt = now, Games = games, RankedProducts = ranked.Count, Warnings = warnings };
+    }
+
+    private static IEnumerable<GameRelease> PicksForMonth(List<GameRelease> games, DateOnly month) =>
+        games.Where(g => g.ReleaseDate?.Year == month.Year && g.ReleaseDate?.Month == month.Month)
+            .GroupBy(g => g.ReleaseDate!.Value).SelectMany(g => Ranking.ForDay(g, g.Key));
+
+    private async Task<HashSet<int>> ReadEarlyAccessLaunchesAsync(List<GameRelease> picks, List<string> warnings,
+        IProgress<string>? progress, CancellationToken ct)
+    {
+        var confirmed = new HashSet<int>();
+        var failed = 0;
+        for (var index = 0; index < picks.Count; index++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var game = picks[index];
+            progress?.Report($"Checking Early Access · {index + 1}/{picks.Count} · {game.Name}");
+            try
+            {
+                var html = await GetAsync(game.StoreUrl + "?cc=gb&l=english", ct);
+                if (SteamParser.IsUpcomingEarlyAccessLaunch(html)) confirmed.Add(game.AppId);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or System.Text.RegularExpressions.RegexMatchTimeoutException ||
+                                        ex is OperationCanceledException && !ct.IsCancellationRequested)
+            {
+                if (++failed >= 5)
+                {
+                    failed += picks.Count - index - 1;
+                    break;
+                }
+            }
+            if (index + 1 < picks.Count) await Task.Delay(1200, ct);
+        }
+        if (failed > 0) warnings.Add($"Early Access status unavailable for {failed} displayed games. Those games have no new badge.");
+        return confirmed;
     }
 
     private async Task<List<SearchRow>> ReadSearchAsync(bool gamesOnly, IProgress<string>? progress, CancellationToken ct)

@@ -9,6 +9,7 @@ public sealed record GameRelease
     public DateOnly? ReleaseDate { get; init; }
     public string ReleaseText { get; init; } = "Date unconfirmed";
     public int? WishlistRank { get; init; }
+    public bool IsEarlyAccessLaunch { get; init; }
     public List<FollowerObservation> Followers { get; init; } = [];
     public string StoreUrl => $"https://store.steampowered.com/app/{AppId}/";
 }

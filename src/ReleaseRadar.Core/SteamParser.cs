@@ -31,6 +31,9 @@ public static class SteamParser
         return rows;
     }
 
+    public static bool IsUpcomingEarlyAccessLaunch(string html) => Matches(html,
+        "<div\\b[^>]*\\bid=\"earlyAccessHeader\"[^>]*>\\s*<h2\\b[^>]*>\\s*Coming Soon To Early Access\\s*</h2>").Count > 0;
+
     public static DateOnly? ParseDate(string text)
     {
         string[] formats = ["d MMM, yyyy", "dd MMM, yyyy", "MMM d, yyyy", "d MMM yyyy", "MMM dd, yyyy", "yyyy-MM-dd"];
